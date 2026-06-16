@@ -320,7 +320,7 @@ As Alex, I want to list all my saved archives sorted by capture date so that I c
 
 *Acceptance criteria:*
 - Given archives have been saved to the server,
-- When I call `GET /api/archives`,
+- When I call `GET /api/v1/archives`,
 - Then the response is a JSON array sorted by `captured_at` descending,
 - And each entry includes: `id`, `url`, `title`, `captured_at`, `asset_count`, `snippet_count`, and a direct link to the archive HTML,
 - And the response returns within 500ms for up to 10,000 archived pages.
@@ -332,7 +332,7 @@ As Jordan, I want to search my archives by original URL or page title so that I 
 
 *Acceptance criteria:*
 - Given I have more than 50 saved archives,
-- When I pass a `?q=` query parameter to `GET /api/archives`,
+- When I pass a `?q=` query parameter to `GET /api/v1/archives`,
 - Then results are filtered to archives where the original URL or title contains the query string (case-insensitive),
 - And results return within 300ms,
 - And if no matches are found, an empty array is returned with HTTP 200 (not 404).
@@ -356,7 +356,7 @@ As Morgan, I want to download a saved archive as a single self-contained HTML fi
 
 *Acceptance criteria:*
 - Given an archive is stored on the server,
-- When I request `GET /api/archives/{id}/download`,
+- When I request `GET /api/v1/archives/{id}/download`,
 - Then I receive a single HTML file with all assets embedded as data URIs,
 - And the file is served with `Content-Disposition: attachment` and a filename of `amber-{domain}-{date}.html`,
 - And the file opens correctly when double-clicked in Windows Explorer or macOS Finder with no internet connection.
@@ -367,7 +367,7 @@ As Morgan, I want to download a saved archive as a single self-contained HTML fi
 As Sam, I want to filter my archives by tactic type so that I can review all pages where canvas fingerprinting was detected.
 
 *Acceptance criteria:*
-- Given I call `GET /api/archives?tactic=fingerprinting`,
+- Given I call `GET /api/v1/archives?tactic=fingerprinting`,
 - Then the response includes only archives that have at least one snippet classified with tactic_type `fingerprinting`,
 - And each result includes the count of fingerprinting snippets found on that page,
 - And I can combine filters (e.g., `?tactic=fingerprinting&severity=high`).
@@ -387,7 +387,7 @@ As Jordan, I want a guided first-run setup flow in the extension popup so that I
 - Given I have installed the extension and have not yet configured a server URL,
 - When I click the amber toolbar icon for the first time,
 - Then the popup displays a setup screen with a labeled text field for Server URL,
-- And a "Test connection" button that calls `GET /health` on the entered URL and displays success or error,
+- And a "Test connection" button that calls `GET /api/v1/health` on the entered URL and displays success or error,
 - And on first successful connection, the setup screen does not appear again.
 
 ---
@@ -484,7 +484,7 @@ As Sam, I want to configure the minimum severity threshold for public submission
 2. All stripped snippets are recorded in SQLite with tactic classifications (or marked unclassified).
 3. A `amber-manifest.json` accompanies the archive listing all stripped elements.
 4. The archive renders identically to the original page in an offline browser.
-5. The archive URL is shown in the popup and accessible via `GET /api/archives`.
+5. The archive URL is shown in the popup and accessible via `GET /api/v1/archives`.
 
 **Exceptions:**
 - If the target page navigates away during capture (redirect, JS navigation), `content.js` serializes whatever DOM state exists at the moment of injection and notes `capture_interrupted: true` in the manifest.
@@ -511,7 +511,7 @@ As Sam, I want to configure the minimum severity threshold for public submission
 2. For each snippet, if `outer_html.length` exceeds 3800 characters (~4096 tokens estimated), it is split on function boundaries or semicolons into chunks of <= 3800 characters.
 3. A classification prompt is constructed: `"Classify this web tracking code by tactic type. Types: fingerprinting, behavioral_analytics, session_recording, ad_targeting, beacon, pixel_tracking, identity_resolution, unknown. Respond with JSON: {tactic_type, severity: low|medium|high, description}. Code:\n\n{chunk}"`.
 4. `window.ai.languageModel` processes each chunk. Results for split snippets are merged: tactic_type is the highest-confidence result, severity is the maximum across chunks.
-5. Each classified snippet is stored in the server's `snippets` table via `POST /api/snippets` with fields: `domain`, `url`, `tactic_type`, `severity`, `raw_snippet`, `context`, `captured_at`.
+5. Each classified snippet is stored in the server's `snippets` table via `POST /api/v1/snippets` with fields: `domain`, `url`, `tactic_type`, `severity`, `raw_snippet`, `context`, `captured_at`.
 6. If the submission preference is "Ask me each time," the popup presents a review list and waits for Sam to choose "Submit to public DB" or "Keep local."
 7. Sam clicks "Submit to public DB."
 8. The server anonymizes the snippets: strips the referring page URL (stores domain only), removes any string literals matching session token patterns (32+ hex chars, JWT format, UUID v4), and truncates `raw_snippet` to 500 characters.
@@ -560,7 +560,7 @@ As Sam, I want to configure the minimum severity threshold for public submission
 
 **Main Flow:**
 1. Alex opens the amber popup and clicks "Browse archives," which opens the archive listing page served by the Go server.
-2. The page loads and calls `GET /api/archives?sort=captured_at_desc&limit=50`.
+2. The page loads and calls `GET /api/v1/archives?sort=captured_at_desc&limit=50`.
 3. The server queries SQLite for archives ordered by `captured_at DESC` and returns the first 50 results as JSON.
 4. The page renders a list: each entry shows the page title, original URL (truncated), capture date/time, asset count, and snippet count.
 5. Alex sees the article they are looking for listed third in the results.
@@ -570,20 +570,20 @@ As Sam, I want to configure the minimum severity threshold for public submission
 
 **Alternative Flow A — Searching by Keyword:**
 - At step 2, Alex types "EFF surveillance" into the search box.
-- The page calls `GET /api/archives?q=EFF+surveillance`.
+- The page calls `GET /api/v1/archives?q=EFF+surveillance`.
 - The server queries SQLite: `WHERE title LIKE '%EFF surveillance%' OR original_url LIKE '%EFF surveillance%'`.
 - Matching archives are returned and rendered in the list.
 - If no results match, the page shows "No archives found for 'EFF surveillance'."
 
 **Alternative Flow B — Filtering by Tactic:**
 - Alex clicks the "Fingerprinting" filter chip.
-- The page calls `GET /api/archives?tactic=fingerprinting`.
+- The page calls `GET /api/v1/archives?tactic=fingerprinting`.
 - The server joins the archives and snippets tables to return only archives with at least one fingerprinting snippet.
 - Each result in the filtered list shows the fingerprinting snippet count in a badge.
 
 **Alternative Flow C — Downloading for Offline Use:**
 - Alex clicks "Download" on a listed archive.
-- The server responds to `GET /api/archives/{id}/download` with the HTML file served as `Content-Disposition: attachment`.
+- The server responds to `GET /api/v1/archives/{id}/download` with the HTML file served as `Content-Disposition: attachment`.
 - Alex saves the file locally and can open it in any browser without a server.
 
 **Postconditions:**
@@ -643,7 +643,7 @@ As Sam, I want to configure the minimum severity threshold for public submission
 
 **Postconditions:**
 1. The extension is configured with a valid server URL stored in `chrome.storage.sync`.
-2. The `GET /health` endpoint has been successfully called at least once, confirming reachability.
+2. The `GET /api/v1/health` endpoint has been successfully called at least once, confirming reachability.
 3. Gemini Nano availability has been detected and its status is persisted in extension settings.
 4. Jordan can immediately capture any page by clicking the amber icon.
 

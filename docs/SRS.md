@@ -125,8 +125,8 @@ The following ASCII context diagram shows the major system components and their 
   |  +----------------+                         | HTTPS       |
   +-------------------------------------------+-+------------+
                                                |
-                                  POST /api/archive
-                                  POST /api/snippets
+                                  POST /api/v1/archive
+                                  POST /api/v1/snippets
                                                |
   +--------------------------------------------v------------+
   |               Go Server (korh.one/amber)                |
@@ -250,7 +250,7 @@ The popup must not close during an in-progress capture. If the user closes and r
 Accessible via right-click on the toolbar icon > "Options". Provides:
 - Server base URL field (default `https://korh.one/amber`), validated as a well-formed HTTPS URL before saving
 - API key field (if server authentication is enabled), stored in `chrome.storage.local` (not `sync`)
-- "Test connection" button that calls `GET /health` and displays the server response
+- "Test connection" button that calls `GET /api/v1/health` and displays the server response
 - Gemini Nano availability check button that calls `window.ai.languageModel.availability()` and displays the result
 - Classification toggle: enable/disable Gemini Nano classification (default: enabled)
 
@@ -274,10 +274,10 @@ amber has no direct hardware interface requirements. Gemini Nano uses the GPU or
 - `session.destroy()` — release model session after all snippets are classified
 
 **Go Server HTTP API:**
-- `POST /api/archive` — submit archive package (JSON body)
-- `POST /api/snippets` — submit batch of classified snippets (JSON body)
-- `GET /api/archives` — list archived pages
-- `GET /health` — liveness check
+- `POST /api/v1/archive` — submit archive package (JSON body)
+- `POST /api/v1/snippets` — submit batch of classified snippets (JSON body)
+- `GET /api/v1/archives` — list archived pages
+- `GET /api/v1/health` — liveness check
 
 **GitHub API:**
 - `PUT /repos/spacedudem/amber-tracker-db/contents/{path}` — upsert files in the tracker DB repository. Used by the Go server's post-insert export routine via the GitHub REST API v3 with `Authorization: Bearer {token}`.
@@ -286,7 +286,7 @@ amber has no direct hardware interface requirements. Gemini Nano uses the GPU or
 
 All extension-to-server communication uses HTTPS/TLS 1.2 or later over port 443. Payloads are UTF-8 encoded JSON. Binary assets (images, fonts) within the archive payload are base64-encoded strings within the JSON body.
 
-The maximum single request body size for `POST /api/archive` is 50 MB. Pages with total asset sizes exceeding this limit must have their assets fetched and stored server-side via URL rather than inlined in the request body (fallback mode, see SRS-SV-007).
+The maximum single request body size for `POST /api/v1/archive` is 50 MB. Pages with total asset sizes exceeding this limit must have their assets fetched and stored server-side via URL rather than inlined in the request body (fallback mode, see SRS-SV-007).
 
 Content-Type for all POST requests: `application/json`.
 Accept header for all GET requests: `application/json`.
@@ -477,7 +477,7 @@ If the background service worker reports that Gemini Nano was unavailable for th
 #### 3.2.4 Go Server Requirements
 
 **SRS-SV-001 — Archive POST Endpoint**
-The server shall expose `POST /api/archive` that:
+The server shall expose `POST /api/v1/archive` that:
 1. Validates the request body is valid JSON with required fields: `pageTitle`, `pageUrl`, `capturedAt`, `cleanHtml`
 2. Generates a UUID v4 as the archive ID
 3. Writes the `cleanHtml` field to disk as `{AMBER_ARCHIVE_DIR}/{archiveId}/index.html`
@@ -485,7 +485,7 @@ The server shall expose `POST /api/archive` that:
 5. Returns `201 Created` with body `{"archiveId": "{uuid}", "url": "/archives/{uuid}/index.html"}`
 
 **SRS-SV-002 — Snippet POST Endpoint**
-The server shall expose `POST /api/snippets` that:
+The server shall expose `POST /api/v1/snippets` that:
 1. Validates the request body is a JSON array with at least one element
 2. Validates each element contains `archiveId`, `domain`, `tactic`, `capturedAt`
 3. Verifies the `archiveId` references an existing archive in the `archives` table
@@ -494,10 +494,10 @@ The server shall expose `POST /api/snippets` that:
 6. After successful insert, triggers the export job (SRS-SV-008) asynchronously
 
 **SRS-SV-003 — Archive List Endpoint**
-The server shall expose `GET /api/archives` that returns a JSON array of archive metadata objects sorted by `captured_at` descending. Each object shall include: `archiveId`, `pageTitle`, `domain`, `capturedAt`, `snippetCount`. Full page URLs shall not be included in this response to prevent URL-based PII exposure via the listing endpoint.
+The server shall expose `GET /api/v1/archives` that returns a JSON array of archive metadata objects sorted by `captured_at` descending. Each object shall include: `archiveId`, `pageTitle`, `domain`, `capturedAt`, `snippetCount`. Full page URLs shall not be included in this response to prevent URL-based PII exposure via the listing endpoint.
 
 **SRS-SV-004 — Health Endpoint**
-The server shall expose `GET /health` that returns `200 OK` with body `{"status": "ok", "db": "ok", "archiveDir": "ok"}`. If the SQLite database is unreachable, `"db"` shall be `"error"`. If the archive directory is unwritable, `"archiveDir"` shall be `"error"`. The overall HTTP status shall be `503 Service Unavailable` if either check fails.
+The server shall expose `GET /api/v1/health` that returns `200 OK` with body `{"status": "ok", "db": "ok", "archiveDir": "ok"}`. If the SQLite database is unreachable, `"db"` shall be `"error"`. If the archive directory is unwritable, `"archiveDir"` shall be `"error"`. The overall HTTP status shall be `503 Service Unavailable` if either check fails.
 
 **SRS-SV-005 — Static Archive Serving**
 The server shall serve the archive directory at `GET /archives/{archiveId}/index.html` as `Content-Type: text/html; charset=utf-8`. It shall set the following response headers on all archive responses:
@@ -507,7 +507,7 @@ The server shall serve the archive directory at `GET /archives/{archiveId}/index
 - `Cache-Control: public, max-age=31536000, immutable`
 
 **SRS-SV-006 — Request Body Size Limit**
-The server shall enforce a 50 MB maximum request body size on `POST /api/archive`. Requests exceeding this limit shall be rejected with `413 Payload Too Large` and body `{"error": "Archive payload exceeds 50 MB limit. Use asset URL mode."}`.
+The server shall enforce a 50 MB maximum request body size on `POST /api/v1/archive`. Requests exceeding this limit shall be rejected with `413 Payload Too Large` and body `{"error": "Archive payload exceeds 50 MB limit. Use asset URL mode."}`.
 
 **SRS-SV-007 — Asset URL Fallback Mode**
 If the extension detects that the total encoded asset payload will exceed 45 MB before POSTing, it shall transmit only the `cleanHtml` with original URLs retained (not replaced with data URIs) and set `assetMode: "urls"` in the request body. In this mode, the server shall fetch the listed asset URLs server-side (without session cookies, best-effort), inline what it can retrieve, and log failures. This mode produces archives that may have missing assets but avoids 413 errors on heavy pages.
@@ -522,7 +522,7 @@ After each snippet batch insert, the server shall run an export job that:
 6. Generates `exports/pihole.txt` as a newline-separated domain list
 7. Commits and pushes updated files to `spacedudem/amber-tracker-db` via GitHub API
 
-The export job shall run in a goroutine and shall not block the HTTP response for `POST /api/snippets`. Export failures shall be logged but shall not affect the server's availability.
+The export job shall run in a goroutine and shall not block the HTTP response for `POST /api/v1/snippets`. Export failures shall be logged but shall not affect the server's availability.
 
 **SRS-SV-009 — API Authentication**
 The server shall support optional Bearer token authentication. If the environment variable `AMBER_API_KEY` is set and non-empty, the server shall require an `Authorization: Bearer {key}` header on all POST endpoints. GET endpoints (`/api/archives`, `/health`, `/archives/...`) shall remain unauthenticated. Requests with a missing or incorrect API key on protected endpoints shall receive `401 Unauthorized`.
@@ -758,7 +758,7 @@ The `docs/` directory shall contain, at minimum:
 
 **Versioning**
 
-The extension version in `manifest.json` and the server version (returned in `GET /health`) shall both follow semantic versioning (`MAJOR.MINOR.PATCH`). v1.0.0 is the target for initial deployment satisfying all requirements in this SRS.
+The extension version in `manifest.json` and the server version (returned in `GET /api/v1/health`) shall both follow semantic versioning (`MAJOR.MINOR.PATCH`). v1.0.0 is the target for initial deployment satisfying all requirements in this SRS.
 
 ---
 
