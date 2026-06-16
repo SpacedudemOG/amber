@@ -1,0 +1,22 @@
+# Go
+server/bin/
+*.exe
+*.test
+*.prof
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Node/Extension build
+extension/dist/
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.key
